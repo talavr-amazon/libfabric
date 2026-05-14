@@ -1450,3 +1450,48 @@ void test_efa_rdm_mr_reg_cuda_memory_non_p2p(struct efa_resource **state)
 	skip();
 }
 #endif
+
+/**
+ * Verify that efa_direct_ope is released when fi_recv fails after
+ * allocating the ope. Without the fix the ope leaks on the error path.
+ */
+void test_efa_direct_ope_released_on_recv_error(struct efa_resource **state)
+{
+	struct efa_resource *resource = *state;
+	struct efa_base_ep *base_ep;
+	size_t buf_size = 64;
+	void *buf;
+	struct iovec iov;
+	struct fi_msg msg = {0};
+	ssize_t ret;
+
+	efa_env.track_mr = 1;
+
+	resource->hints = efa_unit_test_alloc_hints(FI_EP_RDM,
+						    EFA_DIRECT_FABRIC_NAME);
+	efa_unit_test_resource_construct_with_hints(resource, FI_EP_RDM,
+						    FI_VERSION(2, 0),
+						    resource->hints,
+						    true, true);
+
+	base_ep = container_of(resource->ep, struct efa_base_ep,
+			       util_ep.ep_fid);
+
+	buf = malloc(buf_size);
+	assert_non_null(buf);
+
+	/* Post a recv with NULL desc to trigger -FI_EINVAL after ope alloc */
+	iov.iov_base = buf;
+	iov.iov_len = buf_size;
+	msg.msg_iov = &iov;
+	msg.iov_count = 1;
+	msg.desc = NULL;
+
+	ret = fi_recvmsg(resource->ep, &msg, 0);
+	assert_int_equal(ret, -FI_EINVAL);
+
+	/* The ope list must be empty - ope released on error path */
+	assert_true(dlist_empty(&base_ep->efa_direct_ope_list));
+
+	free(buf);
+}
