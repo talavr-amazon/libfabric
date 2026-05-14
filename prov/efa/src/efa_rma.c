@@ -83,7 +83,7 @@ static inline ssize_t efa_rma_post_read(struct efa_base_ep *base_ep,
 	if (total_len == 0) {
 		sge_list[0].addr = (uint64_t)domain->zero_byte_bounce_buf;
 		sge_list[0].length = 0;
-		sge_list[0].lkey = domain->zero_byte_bounce_buf_mr->ibv_mr->lkey;
+		sge_list[0].lkey = domain->zero_byte_bounce_buf_mr->lkey;
 		iov_count = 1;
 	} else {
 		/* Prepare SGE list */
@@ -98,7 +98,7 @@ static inline ssize_t efa_rma_post_read(struct efa_base_ep *base_ep,
 				goto out_err;
 			}
 			efa_mr = (struct efa_mr *)msg->desc[i];
-			sge_list[i].lkey = efa_mr->ibv_mr->lkey;
+			sge_list[i].lkey = efa_mr->lkey;
 		}
 	}
 
@@ -270,7 +270,7 @@ static inline ssize_t efa_rma_post_write(struct efa_base_ep *base_ep,
 	if (total_len == 0) {
 		sge_list[0].addr = (uint64_t)domain->zero_byte_bounce_buf;
 		sge_list[0].length = 0;
-		sge_list[0].lkey = domain->zero_byte_bounce_buf_mr->ibv_mr->lkey;
+		sge_list[0].lkey = domain->zero_byte_bounce_buf_mr->lkey;
 		iov_count = 1;
 	} else if (use_inline) {
 		for (size_t i = 0; i < msg->iov_count; i++) {
@@ -289,7 +289,7 @@ static inline ssize_t efa_rma_post_write(struct efa_base_ep *base_ep,
 				err = -FI_EINVAL;
 				goto out_err;
 			}
-			sge_list[i].lkey = ((struct efa_mr *)msg->desc[i])->ibv_mr->lkey;
+			sge_list[i].lkey = ((struct efa_mr *)msg->desc[i])->lkey;
 		}
 	}
 
@@ -418,7 +418,27 @@ ssize_t efa_rma_inject_write(struct fid_ep *ep_fid, const void *buf, size_t len,
 	EFA_SETUP_RMA_IOV(rma_iov, addr, len, key);
 	EFA_SETUP_MSG_RMA(msg, &iov, NULL, 1, dest_addr, &rma_iov, 1, NULL, 0);
 
+<<<<<<< HEAD
 	return efa_rma_post_write(base_ep, &msg, FI_INJECT);
+=======
+	wr_id = (uintptr_t) efa_fill_context(NULL, dest_addr, FI_INJECT, FI_RMA | FI_WRITE);
+
+	sge.addr = (uint64_t)domain->zero_byte_bounce_buf;
+	sge.length = 0;
+	sge.lkey = domain->zero_byte_bounce_buf_mr->lkey;
+
+	conn = efa_av_addr_to_conn(base_ep->av, dest_addr);
+	assert(conn && conn->ep_addr);
+
+	err = efa_qp_post_write(base_ep->qp, &sge, 1, key, addr,
+				wr_id, 0, 0, conn->ah, conn->ep_addr->qpn,
+				conn->ep_addr->qkey);
+	if (OFI_UNLIKELY(err))
+		err = (err == ENOMEM) ? -FI_EAGAIN : -err;
+
+	ofi_genlock_unlock(&base_ep->util_ep.lock);
+	return err;
+>>>>>>> 57422fff1 (prov/efa: use cached efa_mr->lkey on efa-direct data path)
 }
 
 ssize_t efa_rma_inject_writedata(struct fid_ep *ep_fid, const void *buf,
@@ -442,7 +462,27 @@ ssize_t efa_rma_inject_writedata(struct fid_ep *ep_fid, const void *buf,
 	EFA_SETUP_RMA_IOV(rma_iov, addr, len, key);
 	EFA_SETUP_MSG_RMA(msg, &iov, NULL, 1, dest_addr, &rma_iov, 1, NULL, data);
 
+<<<<<<< HEAD
 	return efa_rma_post_write(base_ep, &msg, FI_INJECT | FI_REMOTE_CQ_DATA);
+=======
+	wr_id = (uintptr_t) efa_fill_context(NULL, dest_addr, FI_INJECT | FI_REMOTE_CQ_DATA, FI_RMA | FI_WRITE);
+
+	sge.addr = (uint64_t)domain->zero_byte_bounce_buf;
+	sge.length = 0;
+	sge.lkey = domain->zero_byte_bounce_buf_mr->lkey;
+
+	conn = efa_av_addr_to_conn(base_ep->av, dest_addr);
+	assert(conn && conn->ep_addr);
+
+	err = efa_qp_post_write(base_ep->qp, &sge, 1, key, addr,
+				wr_id, data, IBV_SEND_INLINE, conn->ah, conn->ep_addr->qpn,
+				conn->ep_addr->qkey);
+	if (OFI_UNLIKELY(err))
+		err = (err == ENOMEM) ? -FI_EAGAIN : -err;
+
+	ofi_genlock_unlock(&base_ep->util_ep.lock);
+	return err;
+>>>>>>> 57422fff1 (prov/efa: use cached efa_mr->lkey on efa-direct data path)
 }
 
 struct fi_ops_rma efa_dgram_ep_rma_ops = {
